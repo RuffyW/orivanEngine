@@ -285,7 +285,10 @@ class Database:
                 FROM leads""", (start, end, start, end)).fetchone()
             settings = dict(self.conn.execute("""SELECT key, value FROM settings WHERE key IN
                 ('last_run','last_search_new','last_search_checked','last_search_errors')""").fetchall())
-        return groups, totals, settings
+            companies = self.conn.execute("""SELECT id, name, profile, status, website, score
+                FROM leads WHERE status != 'archiv'
+                ORDER BY score DESC, checked_at DESC, id DESC LIMIT 100""").fetchall()
+        return groups, totals, settings, companies
 
 
 def discover(profile, radius, endpoint):

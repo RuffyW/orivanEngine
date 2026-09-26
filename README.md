@@ -54,9 +54,11 @@ eigenen `.env` haben nach dem Update keine Wirkung mehr.
 
 Das Dashboard zeigt die Gesamtzahl, offene Leads mit Priorität ab 70,
 heutige Funde und Prüfungen, Status, Branchen, den Verlauf sowie den letzten
-Suchlauf. Es nutzt nur aggregierte Zähler; Firmennamen und Websites werden
-nicht an Prometheus übertragen. Die Zeitreihen beginnen beim ersten Start
-des Monitorings und werden bis zu sieben Tage aufbewahrt (maximal 256 MB
+Suchlauf. Eine Tabelle zeigt bis zu 100 nicht archivierte Firmen nach Priorität
+mit Name, Branche, Status und Website. Die Namen und Websites dieser Firmen
+werden für die Tabelle an den lokalen Prometheus-Dienst übertragen. Archivierte
+Firmen und Entwürfe werden nicht exportiert. Die Zeitreihen beginnen beim ersten
+Start des Monitorings und werden bis zu sieben Tage aufbewahrt (maximal 256 MB
 Prometheus-Datenblöcke). Die Dashboard-Daten bleiben in einem Docker-Volume.
 
 In `.env` ein eigenes, langes `GRAFANA_ADMIN_PASSWORD` eintragen. Dann:

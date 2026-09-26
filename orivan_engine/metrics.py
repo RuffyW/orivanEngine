@@ -1,12 +1,17 @@
-"""Small Prometheus exporter with aggregated SQLite values only."""
+"""Small Prometheus exporter for aggregates and a bounded current lead table."""
 
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Thread
 
 
+def label(value):
+    """Escape an untrusted string for the Prometheus text exposition format."""
+    return str(value or "").replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", " ")
+
+
 def render_metrics(db, timezone_name, engine):
-    groups, totals, settings = db.metrics_snapshot(timezone_name)
+    groups, totals, settings, companies = db.metrics_snapshot(timezone_name)
     values = {
         "orivan_leads": totals["leads"],
         "orivan_priority_leads": totals["priority"],
@@ -33,6 +38,15 @@ def render_metrics(db, timezone_name, engine):
         profile = group["profile"]
         if status.isidentifier() and profile.isidentifier():
             lines.append(f'orivan_leads_by_status_profile{{status="{status}",profile="{profile}"}} {group["amount"]}')
+    lines.append("# TYPE orivan_company_priority gauge")
+    for company in companies:
+        labels = {
+            "lead_id": company["id"], "name": company["name"][:200],
+            "profile": company["profile"], "status": company["status"],
+            "website": (company["website"] or "")[:240],
+        }
+        attrs = ",".join(f'{key}="{label(value)}"' for key, value in labels.items())
+        lines.append(f'orivan_company_priority{{{attrs}}} {company["score"]}')
     return ("\n".join(lines) + "\n").encode("utf-8")
 
 

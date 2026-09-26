@@ -518,6 +518,73 @@
           "values": false
         }
       }
+    },
+    {
+      "id": 14,
+      "title": "Firmen (max. 100, nach Priorität)",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "orivan-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 24,
+        "h": 13
+      },
+      "targets": [
+        {
+          "expr": "orivan_company_priority",
+          "refId": "A",
+          "format": "table",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "instance": true
+            },
+            "indexByName": {
+              "lead_id": 0,
+              "name": 1,
+              "profile": 2,
+              "status": 3,
+              "Value": 4,
+              "website": 5
+            },
+            "renameByName": {
+              "lead_id": "ID",
+              "name": "Unternehmen",
+              "profile": "Branche",
+              "status": "Status",
+              "Value": "Priorität",
+              "website": "Website"
+            }
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
     }
   ],
   "refresh": "1m",
@@ -536,5 +603,5 @@
   "timezone": "browser",
   "title": "Orivan Engine",
   "uid": "orivan-engine",
-  "version": 1
+  "version": 2
 }

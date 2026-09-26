@@ -107,12 +107,12 @@ class CoreTests(unittest.TestCase):
             upgraded.conn.close()
             self.assertEqual(Database(path).get(1)["draft"], "neue Gesprächsnotiz")
 
-    def test_metrics_only_export_aggregates_and_search_summary(self):
+    def test_metrics_export_bounded_company_table_and_search_summary(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = Database(os.path.join(tmp, "leads.db"))
             config = {"radius": 20000, "overpass_url": "https://source.invalid",
                       "max_audits": 1, "pagespeed_key": ""}
-            lead = {"source_id": "osm:node:1", "name": "Vertraulicher Betrieb",
+            lead = {"source_id": "osm:node:1", "name": 'Gerner "Elektro" \\ Betrieb',
                     "profile": "praxis", "website": "https://example.com",
                     "source_url": "https://openstreetmap.org/node/1", "discovered_at": "2026-09-25"}
             engine = Engine(db, config)
@@ -124,8 +124,23 @@ class CoreTests(unittest.TestCase):
             self.assertIn("orivan_leads 1\n", body)
             self.assertIn('orivan_leads_by_status_profile{status="neu",profile="praxis"} 1', body)
             self.assertIn("orivan_last_search_checked 1\n", body)
-            self.assertNotIn("Vertraulicher Betrieb", body)
-            self.assertNotIn("example.com", body)
+            self.assertIn('name="Gerner \\"Elektro\\" \\\\ Betrieb"', body)
+            self.assertIn('website="https://example.com"', body)
+            self.assertIn("orivan_company_priority{", body)
+
+    def test_metrics_limit_company_series_on_large_discovery(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(os.path.join(tmp, "leads.db"))
+            for lead_id in range(120):
+                db.add({"source_id": f"osm:node:{lead_id}", "name": f"Firma {lead_id}",
+                        "profile": "handwerk", "website": None,
+                        "source_url": f"https://www.openstreetmap.org/node/{lead_id}",
+                        "discovered_at": "2026-09-25"})
+            engine = Engine(db, {})
+            body = render_metrics(db, "Europe/Berlin", engine).decode()
+            self.assertEqual(body.count("\norivan_company_priority{"), 100)
+            self.assertIn('lead_id="119"', body)
+            self.assertNotIn('lead_id="1"', body)
 
 
 if __name__ == "__main__":
