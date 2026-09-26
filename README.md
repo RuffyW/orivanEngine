@@ -2,15 +2,15 @@
 
 Lokale Lead-Suche für einen Raspberry Pi 5. Findet Betriebe im Umkreis von Passau über
 OpenStreetMap/Overpass, prüft verlinkte Websites und meldet priorisierte Funde per Telegram.
-Die KI formuliert auf Knopfdruck einen beleggebundenen Entwurf. Es werden keine
-Akquise-Nachrichten automatisch verschickt.
+Der Bot erstellt auf Knopfdruck eine kurze Gesprächsnotiz aus den belegten
+Prüfergebnissen. Es werden keine Akquise-Nachrichten automatisch verschickt.
 
 ## Voraussetzungen
 
 - Raspberry Pi OS 64-bit, Docker Engine und Docker Compose Plugin.
 - Telegram-Bot von [@BotFather](https://t.me/BotFather) und dessen Token.
 - Deine numerische Telegram-Nutzer-ID; der Bot zeigt sie mit `/id` an.
-- Optional: ein kleines Ollama-Textmodell und ein PageSpeed-API-Key.
+- Optional: ein PageSpeed-API-Key.
 
 ## Installation
 
@@ -35,20 +35,20 @@ sich die automatische tägliche Suche anhalten. Standardmäßig läuft sie um
 08:00 Uhr Europe/Berlin und prüft höchstens 20 neue Websites pro Durchlauf.
 Der Suchradius wird in `.env` eingestellt; Version 1 ist auf Passau zentriert.
 
-## KI einschalten
+## Update von der ersten Version
 
-Ohne Modell läuft die Lead-Suche weiter; die Schaltfläche „Entwurf“ meldet,
-dass noch kein Modell konfiguriert ist. Für einen ersten Versuch ein kleines,
-quantisiertes, deutschsprachig brauchbares Ollama-Modell auswählen und auf dem
-Pi laden, zum Beispiel mit:
+Der Entwurf läuft ohne lokales Sprachmodell. Das vermeidet lange Wartezeiten und
+hohe Last auf dem Pi. Nach `git pull` den Dienst neu bauen und den alten
+Ollama-Container dieses Compose-Projekts entfernen:
 
 ```bash
-docker compose exec ollama ollama pull qwen2.5:1.5b
+docker compose up -d --build --remove-orphans
 ```
 
-Dann `OLLAMA_MODEL=qwen2.5:1.5b` in `.env` setzen und den Engine-Container
-neu erstellen. Die Antwortgeschwindigkeit hängt von RAM-Variante und anderen
-Pi-Diensten ab. Ollama wird nur innerhalb des Compose-Netzes angeboten.
+Falls nur das eigenständige `docker-compose` auf deinem Pi funktioniert,
+verwende `docker-compose up -d --build --remove-orphans`. Der zuvor geladene
+Modell-Volume wird dabei nicht gelöscht. Alte `OLLAMA_*`-Einträge in der
+eigenen `.env` haben nach dem Update keine Wirkung mehr.
 
 ## Befehle
 
@@ -64,6 +64,9 @@ Pi-Diensten ab. Ollama wird nur innerhalb des Compose-Netzes angeboten.
   Elemente sind keine Aussage darüber, ob sie anderswo auf der Website existieren.
 - Die Prüfung liest die Startseite, beachtet `robots.txt` und begrenzt HTML auf
   1 MB. Sie ist kein vollständiger SEO-, Barrierefreiheits- oder Rechtstest.
+- Der Entwurf verwendet keine Website-Titel oder Meta-Beschreibungen als Text.
+  Nicht erkannte Links sind Hinweise für die manuelle Prüfung, keine gesicherten
+  Aussagen über das gesamte Angebot des Unternehmens.
 - Ohne `PAGESPEED_API_KEY` wird keine Performance-Zahl behauptet. Mit Key wird
   die mobile PageSpeed-Analyse für geprüfte Websites angefragt; es können
   externe Kosten oder Kontingentgrenzen gelten.

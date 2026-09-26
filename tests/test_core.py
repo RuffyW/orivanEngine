@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-from orivan_engine.core import Database, Engine, SafeSession, SiteParser, discover, public_url, score
+from orivan_engine.core import Database, Engine, SafeSession, SiteParser, discover, draft_for, public_url, score
 from orivan_engine.__main__ import Bot
 
 
@@ -76,6 +76,19 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(bot.db.setting("schedule", "on"), "on")
             bot.command(123, 123, "/plan pausieren")
             self.assertEqual(bot.db.setting("schedule"), "off")
+
+    def test_draft_ignores_repetitive_metadata_without_model_call(self):
+        lead = {"name": "Elektro Gerner", "website": "https://example.com", "profile": "handwerk"}
+        result = {"url": "https://example.com", "checked_at": "2026-09-26T12:00:00Z",
+                  "title": "Elektroinstallation Jaegerwirth, " * 50,
+                  "description": "Elektroinstallation Jaegerwirth, " * 50,
+                  "contact_link": True, "cta_link": False, "https": True}
+        with patch("orivan_engine.core.requests.post", side_effect=AssertionError("model request")):
+            draft = draft_for(lead, result)
+        self.assertIn("kein direkter Termin- oder Anfragelink erkannt", draft)
+        self.assertIn("Geprüfte Seite: https://example.com", draft)
+        self.assertNotIn("Jaegerwirth", draft)
+        self.assertLess(len(draft), 500)
 
 
 if __name__ == "__main__":

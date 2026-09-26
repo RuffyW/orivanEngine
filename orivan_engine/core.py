@@ -286,21 +286,45 @@ def discover(profile, radius, endpoint):
     return items
 
 
-def draft_for(lead, result, ollama_url, model):
-    if not model:
-        return "Ollama-Modell noch nicht konfiguriert."
-    facts = {key: result.get(key) for key in ("url", "checked_at", "https", "viewport", "title",
-             "description", "h1", "contact_link", "cta_link", "mobile_performance") if key in result}
-    prompt = ("Schreibe auf Deutsch maximal 90 Wörter: ein konkreter, höflicher Orivan-Ansatz für "
-              "Webentwicklung/SEO und eine Gesprächsnotiz. Nur belegte Fakten verwenden; fehlende "
-              "Merkmale als 'bei der Prüfung nicht erkannt' formulieren, nie als sicher nicht vorhanden. "
-              "Keine rechtlichen Bewertungen, keine E-Mail versenden. Daten: "
-              + json.dumps({"unternehmen": lead["name"], "branche": lead["profile"], "befunde": facts}, ensure_ascii=False))
-    response = requests.post(ollama_url.rstrip("/") + "/api/generate",
-                             json={"model": model, "prompt": prompt, "stream": False,
-                                   "options": {"num_predict": 220, "temperature": 0.2}}, timeout=180)
-    response.raise_for_status()
-    return response.json().get("response", "").strip()[:2000]
+def draft_for(lead, result):
+    """Create a short, verifiable conversation note without loading a local LLM.
+
+    Website titles and descriptions are deliberately excluded: they often contain
+    repetitive SEO terms and are untrusted content.
+    """
+    name = re.sub(r"\s+", " ", lead["name"]).strip()[:100]
+    url = result.get("url") or lead["website"] or "Website ungeklärt"
+    checked = (result.get("checked_at") or "Datum unbekannt")[:10]
+    if result.get("error") or not result:
+        return "Keine verlässliche Prüfung vorhanden. Website zuerst manuell ansehen."
+
+    if not result.get("contact_link"):
+        observation = "Auf der geprüften Startseite wurde kein direkter Kontaktlink erkannt."
+        idea = "Kontakt und Anfrageweg sichtbar platzieren und auf dem Smartphone testen."
+    elif not result.get("cta_link"):
+        observation = "Auf der geprüften Startseite wurde kein direkter Termin- oder Anfragelink erkannt."
+        idea = "Einen klaren Einstieg für Terminanfragen prüfen und gegebenenfalls vereinfachen."
+    elif result.get("mobile_performance") is not None and result["mobile_performance"] < 50:
+        observation = f'Die mobile PageSpeed-Prüfung ergab {result["mobile_performance"]}/100 Punkte.'
+        idea = "Die größten Ladezeitbremsen prüfen und die mobile Startseite gezielt verbessern."
+    elif not result.get("viewport"):
+        observation = "Im HTML der geprüften Startseite wurde kein mobiler Viewport-Eintrag erkannt."
+        idea = "Die Darstellung und Bedienung auf Smartphones prüfen."
+    elif not result.get("description"):
+        observation = "Im HTML der geprüften Startseite wurde keine Meta-Beschreibung erkannt."
+        idea = "Seitentitel und Suchergebnis-Vorschau gemeinsam überarbeiten."
+    elif not result.get("https"):
+        observation = "Die geprüfte Startseite wurde über HTTP ausgeliefert."
+        idea = "Die HTTPS-Auslieferung und Weiterleitungen prüfen."
+    else:
+        observation = "Die automatische Prüfung ergab keinen klar belegten Verbesserungsansatz."
+        idea = "Website manuell prüfen, bevor ein Angebot formuliert wird."
+
+    return (f"{name} – interne Gesprächsnotiz\n"
+            f"Beobachtung ({checked}): {observation}\n"
+            f"Orivan-Ansatz: {idea}\n"
+            "Vor einer Ansprache den Befund auf der Website manuell bestätigen.\n"
+            f"Geprüfte Seite: {url}")
 
 
 class Engine:

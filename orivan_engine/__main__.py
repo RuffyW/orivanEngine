@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from .core import Database, Engine, audit, daily_due, draft_for
+from .core import Database, Engine, daily_due, draft_for
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 LOG = logging.getLogger(__name__)
@@ -24,8 +24,6 @@ def configuration():
         "radius": int(os.getenv("SEARCH_RADIUS_METERS", "20000")),
         "max_audits": int(os.getenv("MAX_NEW_AUDITS", "20")),
         "overpass_url": os.getenv("OVERPASS_URL", "https://overpass-api.de/api/interpreter"),
-        "ollama_url": os.getenv("OLLAMA_URL", "http://ollama:11434"),
-        "model": os.getenv("OLLAMA_MODEL", "").strip(),
         "pagespeed_key": os.getenv("PAGESPEED_API_KEY", "").strip(),
     }
 
@@ -175,17 +173,9 @@ class Bot:
             if result.get("error") or not result:
                 self.send(chat_id, "Kein belegter Website-Befund für einen Entwurf vorhanden.")
                 return
-            self.send(chat_id, f'Erstelle Entwurf für #{lead_id} …')
-
-            def make_draft():
-                try:
-                    content = draft_for(lead, result, self.config["ollama_url"], self.config["model"])
-                    self.db.draft(lead_id, content)
-                    self.send(chat_id, f'#{lead_id} – Entwurf:\n{content}')
-                except (requests.RequestException, ValueError, KeyError) as exc:
-                    self.send(chat_id, f'KI momentan nicht verfügbar: {str(exc)[:150]}')
-
-            threading.Thread(target=make_draft, daemon=True).start()
+            content = draft_for(lead, result)
+            self.db.draft(lead_id, content)
+            self.send(chat_id, f'#{lead_id} – Entwurf:\n{content}')
         elif self.db.status(lead_id, action):
             self.send(chat_id, f'#{lead_id}: Status auf {action} gesetzt.')
 
