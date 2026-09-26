@@ -529,7 +529,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 28,
+        "y": 32,
         "w": 24,
         "h": 13
       },
@@ -585,6 +585,162 @@
           "show": false
         }
       }
+    },
+    {
+      "id": 15,
+      "title": "Antworten (aktueller Status)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "orivan-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(orivan_leads_by_status_profile{status=\"antwort\"}) or vector(0)",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 16,
+      "title": "Offene Angebote",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "orivan-prometheus"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 28,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(orivan_leads_by_status_profile{status=\"angebot\"}) or vector(0)",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 17,
+      "title": "Aufträge (aktueller Status)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "orivan-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 28,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(orivan_leads_by_status_profile{status=\"auftrag\"}) or vector(0)",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 18,
+      "title": "Fällige Wiedervorlagen",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "orivan-prometheus"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 28,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "orivan_followups_due",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
     }
   ],
   "refresh": "1m",
@@ -603,5 +759,5 @@
   "timezone": "browser",
   "title": "Orivan Engine",
   "uid": "orivan-engine",
-  "version": 2
+  "version": 3
 }

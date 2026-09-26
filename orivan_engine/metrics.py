@@ -23,6 +23,7 @@ def render_metrics(db, timezone_name, engine):
         "orivan_last_search_new": int(settings.get("last_search_new", 0)),
         "orivan_last_search_checked": int(settings.get("last_search_checked", 0)),
         "orivan_last_search_errors": int(settings.get("last_search_errors", 0)),
+        "orivan_followups_due": int(settings.get("followups_due", 0)),
     }
     last_run = settings.get("last_run")
     values["orivan_last_search_timestamp_seconds"] = (

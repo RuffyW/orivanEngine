@@ -35,6 +35,67 @@ sich die automatische tägliche Suche anhalten. Standardmäßig läuft sie um
 08:00 Uhr Europe/Berlin und prüft höchstens 20 neue Websites pro Durchlauf.
 Der Suchradius wird in `.env` eingestellt; Version 1 ist auf Passau zentriert.
 
+## Täglicher Akquise-Ablauf – kostenlos auf dem Pi
+
+Nach dem täglichen Suchlauf kommt eine Telegram-Tagesliste mit fälligen
+Wiedervorlagen, bis zu drei geprüften Firmen und einer Marketingvorlage.
+Firmen mit laufenden Gesprächen werden über Wiedervorlagen betreut. Die
+Tagesauswahl berücksichtigt Prüfungen der letzten 30 Tage mit Priorität ab 40;
+am Folgetag kommen zunächst noch nicht vorgestellte Firmen zum Zug. Wiederholtes
+`/heute` hält die Auswahl stabil, solange sich deren Status nicht ändert.
+Die automatische Nachricht geht wie bisher an die kleinste freigegebene Nutzer-ID;
+alle freigegebenen Nutzer können `/heute` aufrufen und arbeiten am selben Bestand.
+
+| Befehl / Button | Zweck |
+| --- | --- |
+| `/heute` | Tagesliste und bis zu fünf fällige Wiedervorlagen |
+| `/paket 20` oder Akquise-Paket | Belegter Website-Hinweis, Einstiegsangebot, Gesprächsfragen und Text für eine angefragte Analyse |
+| `/notiz 20 Rückruf mit Frau Müller vereinbart` | Gesprächsnotiz speichern (max. 800 Zeichen; ersetzt die vorherige Notiz) |
+| `/wiedervorlage 20 7` | Interne Erinnerung in sieben Tagen |
+| `/wiedervorlage 20 aus` | Erinnerung entfernen |
+| Kontaktiert / Angebot | Status setzen und standardmäßig in drei Tagen intern erinnern |
+| Antwort | Gespräch heute zur Bearbeitung vorlegen |
+| Auftrag / Archiv | Gespräch abschließen und Erinnerung entfernen |
+| `/firma Muster GmbH \| https://muster.example \| Empfehlung` | Eingehende Anfrage oder empfohlenen Betrieb aufnehmen; für unbekannte Website `-` verwenden |
+| `/marketing` | Kurze Textvorlage mit Einladung zur kostenlosen Startseitenanalyse |
+| `/pipeline` | Aktuelle Anzahlen je Vertriebsstatus |
+
+`DAILY_LEAD_LIMIT=3` und `FOLLOWUP_DAYS=3` sind die Standardwerte. Bestehende
+`.env`-Dateien brauchen dafür keine neuen Einträge. Eine neue Tabelle ergänzt
+die vorhandene Datenbank; bestehende Firmen und Gesprächsnotizen bleiben erhalten.
+Bereits laufende Gespräche ohne bisherigen Workflow erscheinen nach dem Update
+zunächst als fällige Wiedervorlage. Auch bei einem fehlgeschlagenen Suchlauf wird
+versucht, die Tagesliste aus dem vorhandenen Bestand zu liefern.
+
+### So nutzt ihr die Vorbereitung
+
+1. Die vorgeschlagenen Startseiten kurz selbst prüfen. Ein nicht erkannter Link
+   beweist weder einen verlorenen Kunden noch Kaufinteresse.
+2. Mit einem kleinen Angebot beginnen: eine kostenlose Analyse einer Startseite
+   mit drei konkreten Hinweisen. Im Gespräch Ziel, Entscheidungsweg und Bedarf
+   klären; erst danach einen abgegrenzten bezahlten Schritt anbieten.
+3. Nach jedem Gespräch Status, Ergebnis und vereinbarten nächsten Termin im Bot
+   festhalten. Die Wiedervorlage erinnert euch intern und versendet keine Werbung.
+4. Zwei Marketingvorlagen pro Woche mit einem eigenen aktuellen Beispiel ergänzen
+   und auf eurem Orivan-Kanal veröffentlichen. Die sieben Themen wiederholen sich
+   wöchentlich; es handelt sich um Vorlagen, nicht um täglich neu recherchierte Posts.
+5. Antworten auf die Einladung „CHECK“ und Empfehlungen mit `/firma` aufnehmen.
+   Nach einigen tatsächlichen Gesprächen auswerten, welche Branche und welches
+   Angebot Interesse erzeugen. Grafana zeigt Antworten, offene Angebote, Aufträge
+   und fällige Wiedervorlagen als aktuelle Bestandszahlen, keine Abschlussprognose.
+
+Die Vorbereitung braucht keine KI, neuen Dienste oder kostenpflichtigen APIs.
+Es bleibt bei höchstens 20 nacheinander geprüften Websites pro Suchlauf
+(über `MAX_NEW_AUDITS` einstellbar). Recherche, Vorlagen und Erinnerungen laufen
+auf dem Pi; ihr übernehmt Veröffentlichung, Gespräche und Angebotsabstimmung.
+`/plan pausieren` pausiert den automatischen Suchlauf samt Tagesnachricht;
+die manuellen Befehle bleiben verfügbar.
+
+Für Werbe-E-Mails gilt grundsätzlich das Erfordernis vorheriger ausdrücklicher
+Einwilligung; es gibt eine enge Bestandskundenausnahme. B2B-Telefonwerbung verlangt
+zumindest mutmaßliche Einwilligung. Ein Website-Befund allein ist keine
+Kontaktfreigabe. Quelle: [§ 7 UWG](https://www.gesetze-im-internet.de/uwg_2004/__7.html).
+
 ## Update von der ersten Version
 
 Der Entwurf läuft ohne lokales Sprachmodell. Das vermeidet lange Wartezeiten und
@@ -89,7 +150,8 @@ gespeicherten Diagrammdaten erhalten bleiben sollen.
 
 `/hilfe`, `/id`, `/suche alle`, `/suche handwerk`, `/suche praxis`,
 `/suche dienstleister`, `/leads`, `/lead 42`, `/ungeklaert`, `/status`,
-`/plan`, `/plan pausieren`, `/plan starten`.
+`/plan`, `/plan pausieren`, `/plan starten`, `/heute`, `/paket 42`,
+`/marketing`, `/pipeline`, `/firma`, `/notiz`, `/wiedervorlage`.
 
 ## Daten und Grenzen
 

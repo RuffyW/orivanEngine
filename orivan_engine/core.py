@@ -1,4 +1,5 @@
 import ipaddress
+import hashlib
 import json
 import logging
 import os
@@ -24,7 +25,7 @@ PROFILES = {
 }
 PASSAU = (48.574, 13.456)
 OVERPASS_FALLBACK = "https://overpass.private.coffee/api/interpreter"
-STATUS = {"neu", "interessant", "kontaktiert", "antwort", "auftrag", "archiv"}
+STATUS = {"neu", "interessant", "kontaktiert", "antwort", "angebot", "auftrag", "archiv"}
 
 
 def now():
@@ -179,7 +180,7 @@ def score(profile, result):
     if result.get("error"):
         return 0
     # Sales priority, not a general website quality score.
-    points = 30 if profile in PROFILES else 0
+    points = 30 if profile in PROFILES or profile == 'manuell' else 0
     points += 10 if not result.get("https") else 0
     points += 8 if not result.get("viewport") else 0
     points += 5 if not result.get("title") else 0
@@ -207,6 +208,12 @@ class Database:
                     audit_json TEXT, draft TEXT, discovered_at TEXT NOT NULL, checked_at TEXT
                 );
                 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS lead_workflow (
+                    lead_id INTEGER PRIMARY KEY, shown_on TEXT, follow_up_on TEXT,
+                    note TEXT NOT NULL DEFAULT ''
+                );
+                INSERT OR IGNORE INTO lead_workflow(lead_id,follow_up_on)
+                    SELECT id,date('now') FROM leads WHERE status IN ('kontaktiert','antwort','angebot');
             """)
             version = self.conn.execute("SELECT value FROM settings WHERE key='draft_version'").fetchone()
             if not version or version[0] != "2":
@@ -230,6 +237,14 @@ class Database:
                 VALUES (:source_id,:name,:profile,:website,:source_url,:discovered_at)""", item)
             return cursor.rowcount
 
+    def add_manual(self, name, website, source):
+        key = hashlib.sha256((name.strip().casefold() + '\n' + (website or '').strip().casefold()).encode()).hexdigest()
+        source_id = 'manual:' + key
+        self.add({'source_id': source_id, 'name': name[:200], 'profile': 'manuell',
+                  'website': website, 'source_url': 'Manuell: ' + source[:200], 'discovered_at': now()})
+        with self.lock:
+            return self.conn.execute('SELECT id FROM leads WHERE source_id=?', (source_id,)).fetchone()[0]
+
     def pending(self, limit):
         with self.lock:
             return self.conn.execute("""SELECT * FROM leads WHERE website IS NOT NULL
@@ -238,7 +253,7 @@ class Database:
                 AND json_extract(audit_json, '$.error') IS NULL) OR
                 (checked_at < datetime('now', '-7 days')
                 AND json_extract(audit_json, '$.error') IS NOT NULL))
-                ORDER BY checked_at IS NOT NULL, checked_at ASC LIMIT ?""", (limit,)).fetchall()
+                ORDER BY checked_at IS NOT NULL, source_id LIKE 'manual:%' DESC, checked_at ASC LIMIT ?""", (limit,)).fetchall()
 
     def update_audit(self, lead_id, result, priority):
         with self.lock, self.conn:
@@ -254,11 +269,68 @@ class Database:
         with self.lock:
             return self.conn.execute("SELECT * FROM leads WHERE id=?", (lead_id,)).fetchone()
 
-    def status(self, lead_id, status):
+    def status(self, lead_id, status, follow_up_on=None):
         if status not in STATUS:
             return False
         with self.lock, self.conn:
-            return self.conn.execute("UPDATE leads SET status=? WHERE id=?", (status, lead_id)).rowcount > 0
+            lead = self.conn.execute("SELECT status FROM leads WHERE id=?", (lead_id,)).fetchone()
+            if not lead:
+                return False
+            if lead["status"] == status:
+                return True
+            self.conn.execute("UPDATE leads SET status=? WHERE id=?", (status, lead_id))
+            self.conn.execute("""INSERT INTO lead_workflow(lead_id,follow_up_on) VALUES (?,?)
+                ON CONFLICT(lead_id) DO UPDATE SET follow_up_on=excluded.follow_up_on""",
+                (lead_id, None if status in ('auftrag', 'archiv') else follow_up_on))
+            return True
+
+    def workflow(self, lead_id):
+        with self.lock:
+            return self.conn.execute("SELECT * FROM lead_workflow WHERE lead_id=?", (lead_id,)).fetchone()
+
+    def set_followup(self, lead_id, day):
+        with self.lock, self.conn:
+            lead = self.conn.execute("SELECT status FROM leads WHERE id=?", (lead_id,)).fetchone()
+            if not lead or lead["status"] in ('auftrag', 'archiv'):
+                return False
+            self.conn.execute("""INSERT INTO lead_workflow(lead_id,follow_up_on) VALUES (?,?)
+                ON CONFLICT(lead_id) DO UPDATE SET follow_up_on=excluded.follow_up_on""", (lead_id, day))
+            return True
+
+    def set_note(self, lead_id, note):
+        with self.lock, self.conn:
+            if not self.conn.execute("SELECT id FROM leads WHERE id=?", (lead_id,)).fetchone():
+                return False
+            self.conn.execute("""INSERT INTO lead_workflow(lead_id,note) VALUES (?,?)
+                ON CONFLICT(lead_id) DO UPDATE SET note=excluded.note""", (lead_id, note[:800]))
+            return True
+
+    def due_followups(self, day, limit=10):
+        with self.lock:
+            return self.conn.execute("""SELECT l.*, w.follow_up_on, w.note FROM leads l
+                JOIN lead_workflow w ON w.lead_id=l.id
+                WHERE w.follow_up_on<=? AND l.status NOT IN ('archiv','auftrag')
+                ORDER BY w.follow_up_on, l.score DESC, l.id LIMIT ?""", (day, limit)).fetchall()
+
+    def daily_candidates(self, day, limit=3):
+        """Keep today's selection stable; rotate previously shown firms on later days."""
+        with self.lock, self.conn:
+            leads = self.conn.execute("""SELECT l.* FROM leads l
+                LEFT JOIN lead_workflow w ON w.lead_id=l.id
+                WHERE l.status IN ('neu','interessant') AND l.score>=40
+                AND julianday(l.checked_at)>=julianday('now','-30 days')
+                AND l.audit_json IS NOT NULL AND json_extract(l.audit_json,'$.error') IS NULL
+                AND w.follow_up_on IS NULL
+                ORDER BY CASE WHEN w.shown_on=? THEN 0 WHEN w.shown_on IS NULL THEN 1 ELSE 2 END,
+                w.shown_on, l.score DESC, l.id LIMIT ?""", (day, limit)).fetchall()
+            for lead in leads:
+                self.conn.execute("""INSERT INTO lead_workflow(lead_id,shown_on) VALUES (?,?)
+                    ON CONFLICT(lead_id) DO UPDATE SET shown_on=excluded.shown_on""", (lead["id"], day))
+            return leads
+
+    def pipeline(self):
+        with self.lock:
+            return dict(self.conn.execute("SELECT status, COUNT(*) FROM leads GROUP BY status").fetchall())
 
     def draft(self, lead_id, text):
         with self.lock, self.conn:
@@ -289,6 +361,9 @@ class Database:
             companies = self.conn.execute("""SELECT id, name, profile, status, website, score
                 FROM leads WHERE status != 'archiv'
                 ORDER BY score DESC, checked_at DESC, id DESC LIMIT 100""").fetchall()
+            settings["followups_due"] = self.conn.execute("""SELECT COUNT(*) FROM lead_workflow w
+                JOIN leads l ON l.id=w.lead_id WHERE w.follow_up_on<=?
+                AND l.status NOT IN ('archiv','auftrag')""", (local_day.isoformat(),)).fetchone()[0]
         return groups, totals, settings, companies
 
 
@@ -328,18 +403,7 @@ def discover(profile, radius, endpoint, fallback_endpoint=""):
     return items
 
 
-def draft_for(lead, result):
-    """Create a short, verifiable conversation note without loading a local LLM.
-
-    Website titles and descriptions are deliberately excluded: they often contain
-    repetitive SEO terms and are untrusted content.
-    """
-    name = re.sub(r"\s+", " ", lead["name"]).strip()[:100]
-    url = result.get("url") or lead["website"] or "Website ungeklärt"
-    checked = (result.get("checked_at") or "Datum unbekannt")[:10]
-    if result.get("error") or not result:
-        return "Keine verlässliche Prüfung vorhanden. Website zuerst manuell ansehen."
-
+def opportunity_for(result):
     if not result.get("contact_link"):
         observation = "Auf der geprüften Startseite wurde kein direkter Kontaktlink erkannt."
         idea = "Kontakt und Anfrageweg sichtbar platzieren und auf dem Smartphone testen."
@@ -361,6 +425,17 @@ def draft_for(lead, result):
     else:
         observation = "Die automatische Prüfung ergab keinen klar belegten Verbesserungsansatz."
         idea = "Website manuell prüfen, bevor ein Angebot formuliert wird."
+    return observation, idea
+
+
+def draft_for(lead, result):
+    """Create an evidence-based note without reusing untrusted SEO metadata."""
+    name = re.sub(r"\s+", " ", lead["name"]).strip()[:100]
+    url = result.get("url") or lead["website"] or "Website ungeklärt"
+    checked = (result.get("checked_at") or "Datum unbekannt")[:10]
+    if result.get("error") or not result:
+        return "Keine verlässliche Prüfung vorhanden. Website zuerst manuell ansehen."
+    observation, idea = opportunity_for(result)
 
     return (f"{name} – interne Gesprächsnotiz\n"
             f"Beobachtung ({checked}): {observation}\n"
