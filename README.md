@@ -50,6 +50,39 @@ verwende `docker-compose up -d --build --remove-orphans`. Der zuvor geladene
 Modell-Volume wird dabei nicht gelöscht. Alte `OLLAMA_*`-Einträge in der
 eigenen `.env` haben nach dem Update keine Wirkung mehr.
 
+## Grafana (optional)
+
+Das Dashboard zeigt die Gesamtzahl, offene Leads mit Priorität ab 70,
+heutige Funde und Prüfungen, Status, Branchen, den Verlauf sowie den letzten
+Suchlauf. Es nutzt nur aggregierte Zähler; Firmennamen und Websites werden
+nicht an Prometheus übertragen. Die Zeitreihen beginnen beim ersten Start
+des Monitorings und werden bis zu sieben Tage aufbewahrt (maximal 256 MB
+Prometheus-Datenblöcke). Die Dashboard-Daten bleiben in einem Docker-Volume.
+
+In `.env` ein eigenes, langes `GRAFANA_ADMIN_PASSWORD` eintragen. Dann:
+
+```bash
+git pull --ff-only
+docker-compose -f compose.yaml -f compose.grafana.yaml up -d --build --remove-orphans
+```
+
+Falls das Compose-Plugin auf deinem Pi funktioniert, kannst du stattdessen
+`docker compose -f compose.yaml -f compose.grafana.yaml up -d --build --remove-orphans`
+verwenden. Grafana lauscht nur auf `127.0.0.1:3000` des Pi. Vom eigenen
+Rechner aus einen SSH-Tunnel öffnen und `http://localhost:3000` aufrufen:
+
+```bash
+ssh -L 3000:127.0.0.1:3000 PI_BENUTZER@PI_ADRESSE
+```
+
+Anmeldung: `admin` und das Passwort aus `.env`. Das Dashboard liegt im Ordner
+**Orivan**. Beim ersten Start bis zu einer Minute auf die erste Messung warten.
+Prometheus und Grafana sind zusätzliche Prozesse auf dem Pi; bei knappen
+Ressourcen kannst du sie mit `docker-compose -f compose.yaml -f compose.grafana.yaml stop grafana prometheus`
+anhalten. Die normale Engine läuft weiter. Zum erneuten Start den obigen
+`up`-Befehl nutzen. Die Volumes mit `down -v` nicht löschen, wenn die
+gespeicherten Diagrammdaten erhalten bleiben sollen.
+
 ## Befehle
 
 `/hilfe`, `/id`, `/suche alle`, `/suche handwerk`, `/suche praxis`,

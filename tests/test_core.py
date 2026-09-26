@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 
 from orivan_engine.core import Database, Engine, SafeSession, SiteParser, discover, draft_for, public_url, score
 from orivan_engine.__main__ import Bot
+from orivan_engine.metrics import render_metrics
 
 
 class CoreTests(unittest.TestCase):
@@ -105,6 +106,26 @@ class CoreTests(unittest.TestCase):
             upgraded.draft(1, "neue Gesprächsnotiz")
             upgraded.conn.close()
             self.assertEqual(Database(path).get(1)["draft"], "neue Gesprächsnotiz")
+
+    def test_metrics_only_export_aggregates_and_search_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(os.path.join(tmp, "leads.db"))
+            config = {"radius": 20000, "overpass_url": "https://source.invalid",
+                      "max_audits": 1, "pagespeed_key": ""}
+            lead = {"source_id": "osm:node:1", "name": "Vertraulicher Betrieb",
+                    "profile": "praxis", "website": "https://example.com",
+                    "source_url": "https://openstreetmap.org/node/1", "discovered_at": "2026-09-25"}
+            engine = Engine(db, config)
+            with patch("orivan_engine.core.discover", return_value=[lead]), \
+                 patch("orivan_engine.core.audit", return_value={"https": True}), \
+                 patch("orivan_engine.core.time.sleep"):
+                engine.run("praxis")
+            body = render_metrics(db, "Europe/Berlin", engine).decode()
+            self.assertIn("orivan_leads 1\n", body)
+            self.assertIn('orivan_leads_by_status_profile{status="neu",profile="praxis"} 1', body)
+            self.assertIn("orivan_last_search_checked 1\n", body)
+            self.assertNotIn("Vertraulicher Betrieb", body)
+            self.assertNotIn("example.com", body)
 
 
 if __name__ == "__main__":

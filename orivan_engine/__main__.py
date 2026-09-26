@@ -207,4 +207,8 @@ if __name__ == "__main__":
         raise SystemExit("TELEGRAM_BOT_TOKEN fehlt. Siehe .env.example")
     if not config["allowed"]:
         LOG.warning("Keine Nutzer-ID freigegeben. Nur /id ist verfügbar.")
-    Bot(config).poll()
+    bot = Bot(config)
+    if os.getenv("ORIVAN_METRICS_ENABLED") == "1":
+        from .metrics import start_metrics
+        start_metrics(bot.db, config["timezone"], bot.engine)
+    bot.poll()

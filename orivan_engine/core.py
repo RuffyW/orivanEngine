@@ -7,7 +7,7 @@ import socket
 import sqlite3
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, time as daytime, timedelta, timezone
 from html.parser import HTMLParser
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
@@ -267,6 +267,26 @@ class Database:
         with self.lock:
             return self.conn.execute("SELECT COUNT(*) FROM leads").fetchone()[0]
 
+    def metrics_snapshot(self, timezone_name):
+        local_day = datetime.now(ZoneInfo(timezone_name)).date()
+        start = datetime.combine(local_day, daytime.min, ZoneInfo(timezone_name)).astimezone(timezone.utc).isoformat(timespec="seconds")
+        end = datetime.combine(local_day + timedelta(days=1), daytime.min, ZoneInfo(timezone_name)).astimezone(timezone.utc).isoformat(timespec="seconds")
+        with self.lock:
+            groups = self.conn.execute(
+                "SELECT status, profile, COUNT(*) AS amount FROM leads GROUP BY status, profile"
+            ).fetchall()
+            totals = self.conn.execute("""SELECT
+                COUNT(*) AS leads,
+                SUM(CASE WHEN score >= 70 AND status NOT IN ('archiv','auftrag') THEN 1 ELSE 0 END) AS priority,
+                SUM(CASE WHEN website IS NULL THEN 1 ELSE 0 END) AS without_website,
+                SUM(CASE WHEN draft IS NOT NULL THEN 1 ELSE 0 END) AS drafts,
+                SUM(CASE WHEN discovered_at>=? AND discovered_at<? THEN 1 ELSE 0 END) AS new_today,
+                SUM(CASE WHEN checked_at>=? AND checked_at<? THEN 1 ELSE 0 END) AS checked_today
+                FROM leads""", (start, end, start, end)).fetchone()
+            settings = dict(self.conn.execute("""SELECT key, value FROM settings WHERE key IN
+                ('last_run','last_search_new','last_search_checked','last_search_errors')""").fetchall())
+        return groups, totals, settings
+
 
 def discover(profile, radius, endpoint):
     if profile not in PROFILES:
@@ -359,6 +379,9 @@ class Engine:
                 checked += 1
                 time.sleep(1)
             self.db.set("last_run", now())
+            self.db.set("last_search_new", added)
+            self.db.set("last_search_checked", checked)
+            self.db.set("last_search_errors", len(errors))
             summary = f"Suche beendet: {added} neue Unternehmen, {checked} Websites geprüft."
             if errors:
                 summary += " Fehler: " + "; ".join(errors)
