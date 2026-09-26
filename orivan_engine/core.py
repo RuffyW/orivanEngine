@@ -207,6 +207,11 @@ class Database:
                 );
                 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
             """)
+            version = self.conn.execute("SELECT value FROM settings WHERE key='draft_version'").fetchone()
+            if not version or version[0] != "2":
+                self.conn.execute("UPDATE leads SET draft=NULL")
+                self.conn.execute("""INSERT INTO settings(key,value) VALUES('draft_version','2')
+                    ON CONFLICT(key) DO UPDATE SET value=excluded.value""")
 
     def setting(self, key, default=None):
         with self.lock:

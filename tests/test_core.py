@@ -90,6 +90,22 @@ class CoreTests(unittest.TestCase):
         self.assertNotIn("Jaegerwirth", draft)
         self.assertLess(len(draft), 500)
 
+    def test_old_model_draft_is_cleared_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "leads.db")
+            db = Database(path)
+            db.add({"source_id": "osm:node:2", "name": "Elektro Gerner", "profile": "handwerk",
+                    "website": "https://example.com", "source_url": "https://openstreetmap.org/node/2",
+                    "discovered_at": "2026-09-25"})
+            db.draft(1, "alter wiederholter Modelltext")
+            db.set("draft_version", "1")
+            db.conn.close()
+            upgraded = Database(path)
+            self.assertIsNone(upgraded.get(1)["draft"])
+            upgraded.draft(1, "neue Gesprächsnotiz")
+            upgraded.conn.close()
+            self.assertEqual(Database(path).get(1)["draft"], "neue Gesprächsnotiz")
+
 
 if __name__ == "__main__":
     unittest.main()
