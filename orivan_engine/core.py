@@ -23,6 +23,7 @@ PROFILES = {
     "dienstleister": [('office', 'lawyer|accountant|insurance|estate_agent|consulting')],
 }
 PASSAU = (48.574, 13.456)
+OVERPASS_FALLBACK = "https://overpass.private.coffee/api/interpreter"
 STATUS = {"neu", "interessant", "kontaktiert", "antwort", "auftrag", "archiv"}
 
 
@@ -291,7 +292,7 @@ class Database:
         return groups, totals, settings, companies
 
 
-def discover(profile, radius, endpoint):
+def discover(profile, radius, endpoint, fallback_endpoint=""):
     if profile not in PROFILES:
         raise ValueError("Unbekanntes Branchenprofil")
     if not 1000 <= radius <= 50000:
@@ -300,7 +301,20 @@ def discover(profile, radius, endpoint):
     clauses = "".join(f'nwr(around:{radius},{lat},{lon})["name"]["{key}"~"^({regex})$"];'
                       for key, regex in PROFILES[profile])
     query = f"[out:json][timeout:35];({clauses});out tags center;"
-    response = requests.post(endpoint, data={"data": query}, timeout=55, headers={"User-Agent": USER_AGENT})
+    def fetch(url):
+        return requests.post(url, data={"data": query}, timeout=55,
+                             headers={"User-Agent": USER_AGENT})
+
+    try:
+        response = fetch(endpoint)
+    except (requests.Timeout, requests.ConnectionError):
+        if not fallback_endpoint or fallback_endpoint == endpoint:
+            raise
+        response = fetch(fallback_endpoint)
+    else:
+        if response.status_code in (502, 503, 504) and fallback_endpoint and fallback_endpoint != endpoint:
+            response.close()
+            response = fetch(fallback_endpoint)
     response.raise_for_status()
     items = []
     for element in response.json().get("elements", []):
@@ -370,7 +384,8 @@ class Engine:
             added, errors = 0, []
             for p in profiles:
                 try:
-                    for item in discover(p, self.config["radius"], self.config["overpass_url"]):
+                    for item in discover(p, self.config["radius"], self.config["overpass_url"],
+                                         self.config.get("overpass_fallback_url", OVERPASS_FALLBACK)):
                         added += self.db.add(item)
                 except (requests.RequestException, ValueError, KeyError) as exc:
                     errors.append(f"{p}: {str(exc)[:100]}")

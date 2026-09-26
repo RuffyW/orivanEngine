@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
+import requests
+
 from orivan_engine.core import Database, Engine, SafeSession, SiteParser, discover, draft_for, public_url, score
 from orivan_engine.__main__ import Bot
 from orivan_engine.metrics import render_metrics
@@ -47,6 +49,28 @@ class CoreTests(unittest.TestCase):
             db.update_audit(lead["id"], {"url": "https://beispiel.de"}, 73)
             self.assertEqual(db.list()[0]["score"], 73)
             self.assertTrue(db.status(lead["id"], "interessant"))
+
+    def test_discovery_uses_one_fallback_after_gateway_timeout(self):
+        unavailable = Mock(status_code=504)
+        fallback = Mock(status_code=200)
+        fallback.json.return_value = {"elements": [{"type": "node", "id": 9,
+                                                       "tags": {"name": "Praxis Beispiel"}}]}
+        with patch("orivan_engine.core.requests.post", side_effect=[unavailable, fallback]) as post:
+            leads = discover("praxis", 20000, "https://primary.example/api/interpreter",
+                             "https://fallback.example/api/interpreter")
+        self.assertEqual(len(leads), 1)
+        self.assertEqual(post.call_count, 2)
+        self.assertEqual(post.call_args.args[0], "https://fallback.example/api/interpreter")
+        unavailable.close.assert_called_once()
+
+    def test_discovery_does_not_retry_rate_limit(self):
+        response = Mock(status_code=429)
+        response.raise_for_status.side_effect = requests.HTTPError("429 Too Many Requests")
+        with patch("orivan_engine.core.requests.post", return_value=response) as post:
+            with self.assertRaises(requests.HTTPError):
+                discover("praxis", 20000, "https://primary.example/api/interpreter",
+                         "https://fallback.example/api/interpreter")
+        post.assert_called_once()
 
     def test_search_runs_with_mocked_source_and_audit(self):
         with tempfile.TemporaryDirectory() as tmp:

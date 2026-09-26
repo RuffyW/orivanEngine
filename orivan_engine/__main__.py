@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from .core import Database, Engine, daily_due, draft_for
+from .core import Database, Engine, OVERPASS_FALLBACK, daily_due, draft_for
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 LOG = logging.getLogger(__name__)
@@ -24,6 +24,7 @@ def configuration():
         "radius": int(os.getenv("SEARCH_RADIUS_METERS", "20000")),
         "max_audits": int(os.getenv("MAX_NEW_AUDITS", "20")),
         "overpass_url": os.getenv("OVERPASS_URL", "https://overpass-api.de/api/interpreter"),
+        "overpass_fallback_url": os.getenv("OVERPASS_FALLBACK_URL", OVERPASS_FALLBACK).strip(),
         "pagespeed_key": os.getenv("PAGESPEED_API_KEY", "").strip(),
     }
 

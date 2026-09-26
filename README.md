@@ -105,8 +105,13 @@ gespeicherten Diagrammdaten erhalten bleiben sollen.
 - Ohne `PAGESPEED_API_KEY` wird keine Performance-Zahl behauptet. Mit Key wird
   die mobile PageSpeed-Analyse für geprüfte Websites angefragt; es können
   externe Kosten oder Kontingentgrenzen gelten.
-- Die öffentliche Overpass-Instanz kann Anfragen begrenzen. Umfang und Takt
-  sind bewusst niedrig; bei größerem Umfang braucht es eine geeignete Quelle.
+- Gibt die primäre Overpass-Instanz einen Gateway-Fehler (502/503/504) zurück
+  oder bricht die Verbindung ab, versucht die Engine die jeweilige Branche
+  einmal bei `overpass.private.coffee`. Bei 429/406 wird nicht sofort erneut
+  angefragt. Den zweiten Endpunkt kannst du mit `OVERPASS_FALLBACK_URL` in
+  `.env` ändern oder mit einem leeren Wert deaktivieren. Für verlässliche
+  gewerbliche Nutzung empfiehlt sich ein eigener oder bezahlter Dienst.
+  Umfang und Takt der Suchanfragen bleiben bewusst niedrig.
 - Datenquelle: © OpenStreetMap contributors,
   https://www.openstreetmap.org/copyright (ODbL).
 
